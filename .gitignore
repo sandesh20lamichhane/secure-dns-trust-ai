@@ -1,0 +1,17 @@
+# Data and outputs live on Drive, never in git
+data/
+artifacts/
+results/
+paper/
+*.parquet
+*.db
+*.db-wal
+*.db-shm
+*.pt
+*.pth
+run_manifest.jsonl
+
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store

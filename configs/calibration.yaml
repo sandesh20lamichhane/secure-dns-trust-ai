@@ -1,0 +1,10 @@
+run_family: calibration
+seed: 42
+methods: [none, platt, isotonic]
+holdout_fraction: 0.15          # calibration set, disjoint from train and test
+metrics: [brier_score, ece, mce, reliability_curve]
+ece_bins: 15
+operating_points:
+  - {name: high_recall, target_tpr: 0.95}
+  - {name: balanced, target: max_f1}
+  - {name: low_fpr, target_fpr: 0.001}

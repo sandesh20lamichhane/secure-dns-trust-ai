@@ -1,0 +1,26 @@
+run_family: cnn_bilstm
+seed: 42
+dataset_version: v1
+split: {name: family_disjoint_v1}
+input:
+  max_length: 63                # DNS label limit
+  charset: "abcdefghijklmnopqrstuvwxyz0123456789-._"
+model:
+  embedding_dim: 128
+  conv_filters: 128
+  kernel_sizes: [2, 3, 4]
+  lstm_hidden: 128
+  bidirectional: true
+  dropout: 0.4
+  penultimate_dim: 64           # exported as the fusion embedding
+train:
+  batch_size: 512
+  epochs: 60
+  optimizer: adamw
+  lr: 0.001
+  weight_decay: 0.01
+  scheduler: cosine
+  loss: focal                   # NOT SMOTE - see README
+  focal_gamma: 2.0
+  early_stopping_patience: 8
+  checkpoint_every_epochs: 1

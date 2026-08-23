@@ -1,0 +1,21 @@
+run_family: xgboost
+seed: 42
+dataset_version: v1
+split: {name: family_disjoint_v1}
+features: {groups: [lexical, dns, tlsa, certificate]}
+model:
+  name: xgboost
+  objective: binary:logistic
+  eval_metric: aucpr
+  tree_method: hist
+  device: cuda
+  max_depth: 8
+  learning_rate: 0.05
+  n_estimators: 2000
+  early_stopping_rounds: 100
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_weight: 5
+  reg_lambda: 1.0
+  scale_pos_weight: auto        # computed from the training split
+calibration: {method: isotonic, cv: 5}

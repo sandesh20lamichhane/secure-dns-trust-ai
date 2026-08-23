@@ -1,0 +1,21 @@
+run_family: fusion
+seed: 42
+dataset_version: v1
+split: {name: family_disjoint_v1}
+# Feature-level fusion: CNN-BiLSTM penultimate embedding is concatenated with
+# the tabular matrix, then XGBoost is trained on the concatenation.
+embedding_source:
+  run_id: null                  # set to the cnn_bilstm run_id that produced it
+  dim: 64
+features: {groups: [lexical, dns, tlsa, certificate, embedding]}
+model:
+  name: xgboost
+  objective: binary:logistic
+  eval_metric: aucpr
+  tree_method: hist
+  device: cuda
+  max_depth: 8
+  learning_rate: 0.05
+  n_estimators: 2000
+  early_stopping_rounds: 100
+calibration: {method: isotonic, cv: 5}

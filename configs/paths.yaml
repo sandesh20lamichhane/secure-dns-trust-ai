@@ -1,0 +1,33 @@
+# Single source of truth for every storage location.
+# Nothing else in the project may hard-code a Drive path.
+
+drive_root: /content/drive/MyDrive/research/dns_trust_scoring
+local_root: /content/work          # Colab local SSD - fast, ephemeral
+repo_root: /content/secure-dns-trust-ai
+
+data:
+  raw: ${drive_root}/data/00_raw            # WRITE-ONCE: public downloads
+  collected: ${drive_root}/data/01_collected # WRITE-ONCE: our own time-stamped scans
+  interim: ${drive_root}/data/02_interim
+  features: ${drive_root}/data/03_features
+  splits: ${drive_root}/data/04_splits
+
+artifacts:
+  models: ${drive_root}/artifacts/models
+  predictions: ${drive_root}/artifacts/predictions
+  shap_values: ${drive_root}/artifacts/shap_values
+  checkpoints: ${drive_root}/artifacts/checkpoints
+  logs: ${drive_root}/artifacts/logs
+
+results:
+  tables: ${drive_root}/results/tables
+  figures: ${drive_root}/results/figures
+
+manifest: ${drive_root}/run_manifest.jsonl
+leakage_notes: ${drive_root}/_LEAKAGE_NOTES.md
+
+# Local working copies - populated by src.utils.io.stage_local()
+local:
+  data: ${local_root}/data
+  ledger: ${local_root}/certificate_ledger.db
+  shards: ${local_root}/shards

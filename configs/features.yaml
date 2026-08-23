@@ -1,0 +1,39 @@
+# Feature groups. Toggle per experiment; the enabled set is hashed into the
+# run manifest, so an ablation is a config change, never a code change.
+
+groups:
+  lexical:
+    enabled: true
+    features: [length, n_labels, tld, shannon_entropy, vowel_ratio, digit_ratio,
+               hyphen_count, max_consec_consonants, bigram_score, trigram_score,
+               dictionary_word_ratio, is_idn]
+
+  dns:
+    enabled: true
+    features: [ttl_a, n_a_records, n_ns_records, has_mx, has_aaaa,
+               ns_diversity, dnssec_signed]
+
+  tlsa:
+    enabled: true
+    features: [has_tlsa, tlsa_usage, tlsa_selector, tlsa_matching_type,
+               tlsa_matches_cert, tlsa_response_bytes]
+
+  certificate:
+    enabled: true
+    features: [issuer_org, is_free_ca, validity_days, days_until_expiry,
+               cert_age_at_observation, is_self_signed, is_expired,
+               san_count, cn_san_mismatch, wildcard_san, key_algorithm,
+               key_bits, sig_algorithm, chain_depth, ct_log_count,
+               days_since_first_ct_seen]
+
+  embedding:
+    enabled: true                  # CNN-BiLSTM penultimate layer, fused into XGBoost
+    dim: 64
+
+# Features quarantined by the leakage audit. Never enabled in primary
+# experiments; see _LEAKAGE_NOTES.md for the reasoning on each.
+quarantined:
+  - third_party_reputation_score
+  - alexa_rank
+  - blacklist_hit_count
+  - vt_positives

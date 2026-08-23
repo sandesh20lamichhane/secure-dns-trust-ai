@@ -1,0 +1,10 @@
+run_family: baseline
+seed: 42
+dataset_version: v1
+split: {name: family_disjoint_v1}
+features: {groups: [lexical, dns, tlsa, certificate]}
+models:
+  logistic_regression: {C: 1.0, max_iter: 2000, class_weight: balanced}
+  random_forest: {n_estimators: 500, max_depth: null, class_weight: balanced_subsample, n_jobs: -1}
+  svm_rbf: {C: 1.0, gamma: scale, class_weight: balanced, subsample_n: 50000}
+calibration: {method: isotonic, cv: 5}
