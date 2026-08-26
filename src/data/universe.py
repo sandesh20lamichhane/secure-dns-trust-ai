@@ -29,6 +29,17 @@ _TWO_LEVEL = {"co.uk", "org.uk", "ac.uk", "gov.uk", "co.in", "net.in", "org.in",
               "co.jp", "com.au", "net.au", "com.br", "co.za", "com.cn"}
 
 
+_IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+
+def is_ip_literal(host: str) -> bool:
+    """URLhaus carries many bare-IP URLs. An IP has no registrable domain, no
+    DNS name to score lexically, and no TLSA record, so it falls outside the
+    unit of analysis and is dropped rather than mangled into a pseudo-domain."""
+    h = str(host).strip().lower()
+    return bool(_IPV4.match(h)) or ":" in h
+
+
 def registrable(domain: str) -> str:
     """Reduce a hostname to its registrable domain.
 
@@ -38,6 +49,8 @@ def registrable(domain: str) -> str:
     """
     d = str(domain).strip().lower().rstrip(".")
     d = re.sub(r"^https?://", "", d).split("/")[0].split(":")[0]
+    if is_ip_literal(d):
+        return ""
     parts = d.split(".")
     if len(parts) < 3:
         return d
@@ -47,6 +60,7 @@ def registrable(domain: str) -> str:
 
 
 def _frame(rows: pd.DataFrame) -> pd.DataFrame:
+    rows = rows.copy()                      # avoid mutating a caller's slice
     for col in SCHEMA:
         if col not in rows.columns:
             rows[col] = None
@@ -136,24 +150,56 @@ def load_dgarchive(path, per_family: int | None = 20_000) -> pd.DataFrame:
 
 
 def load_phish_feed(path, source: str, family: str = "phishing") -> pd.DataFrame:
-    """PhishTank / OpenPhish / URLhaus. URLs are reduced to registrable domains,
-    which loses per-URL granularity - correct here, since the unit of analysis
-    is the domain and its certificate, not the individual URL."""
-    text = Path(path).read_text(errors="replace")
+    """PhishTank / OpenPhish / URLhaus.
+
+    URLhaus prefixes its dump with a comment block and hides the column header
+    inside it, so a naive read_csv picks the wrong column and silently returns
+    a handful of rows. The header is recovered from the comment block when
+    present.
+
+    URLs are reduced to registrable domains, losing per-URL granularity. That
+    is correct here: the unit of analysis is the domain and its certificate,
+    not the individual URL.
+    """
+    from io import StringIO
+
+    path = str(path)
+    lines = Path(path).read_text(errors="replace").splitlines()
+    comments = [l for l in lines if l.lstrip().startswith("#")]
+    data = [l for l in lines if l.strip() and not l.lstrip().startswith("#")]
+    if not data:
+        return _frame(pd.DataFrame(columns=["domain"]))
+
     if path.endswith(".csv"):
-        df = pd.read_csv(path, on_bad_lines="skip")
-        col = next((c for c in df.columns if "url" in c.lower()), df.columns[0])
-        urls = df[col]
-        dates = next((df[c] for c in df.columns
-                      if "date" in c.lower() or "added" in c.lower()), None)
+        header = None
+        for c in reversed(comments):                    # header is the last comment
+            fields = [x.strip() for x in c.lstrip("#").strip().split(",")]
+            if len(fields) > 2 and any("url" in f.lower() for f in fields):
+                header = fields
+                break
+        buf = StringIO("\n".join(data))
+        if header:
+            df = pd.read_csv(buf, header=None, names=header, on_bad_lines="skip")
+        else:
+            df = pd.read_csv(StringIO("\n".join(lines)), on_bad_lines="skip")
+        url_col = next((c for c in df.columns if "url" in str(c).lower()
+                        and "link" not in str(c).lower()), df.columns[0])
+        urls = df[url_col].astype(str)
+        date_col = next((c for c in df.columns
+                         if "dateadded" in str(c).lower() or "date" in str(c).lower()
+                         or "added" in str(c).lower()), None)
+        dates = df[date_col] if date_col is not None else None
     else:
-        urls = pd.Series([l for l in text.splitlines() if l and not l.startswith("#")])
+        urls = pd.Series(data, dtype=str)
         dates = None
+
     out = pd.DataFrame({"domain": urls.map(registrable)})
     out["first_seen"] = list(dates) if dates is not None else None
     out["label"] = 1
     out["family"] = family
     out["source"] = source
+    out = out[out["domain"].str.contains(r"\.", regex=True, na=False)]
+    out = out[out["domain"].str.len() > 0]
     return _frame(out.drop_duplicates("domain"))
 
 
