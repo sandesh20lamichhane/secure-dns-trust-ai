@@ -61,8 +61,20 @@ def file_hash(path: str | Path) -> str:
 
 
 def ensure_tree(p: dict) -> None:
-    """Create every directory named in paths.yaml. Idempotent."""
+    """Create every directory named in paths.yaml. Idempotent.
+
+    Entries that name a FILE (they carry a suffix, e.g. the SQLite ledger or
+    the JSONL manifest) get their parent created, never themselves - making a
+    directory called `certificate_ledger.db` would leave SQLite unable to open
+    it, with a misleading "unable to open database file" error.
+    """
+    def _mk(value):
+        path = Path(value)
+        (path.parent if path.suffix else path).mkdir(parents=True, exist_ok=True)
+
     for section in ("data", "artifacts", "results", "local"):
         for value in p.get(section, {}).values():
-            Path(value).mkdir(parents=True, exist_ok=True)
-    Path(p["manifest"]).parent.mkdir(parents=True, exist_ok=True)
+            _mk(value)
+    for key in ("manifest", "leakage_notes"):
+        if key in p:
+            _mk(p[key])
