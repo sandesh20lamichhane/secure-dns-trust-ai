@@ -7,6 +7,7 @@ write-once rather than regenerable.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import datetime as _dt
 import ssl
 from typing import Iterable
@@ -133,6 +134,22 @@ async def probe_one(domain: str, port: int = 443, timeout: float = 10.0) -> tupl
         return domain, "tls_error", None, f"{type(exc).__name__}: {str(exc)[:180]}"
 
 
+def _run(coro):
+    """Execute a coroutine whether or not an event loop is already running.
+
+    Colab and Jupyter run the kernel inside an asyncio loop, so asyncio.run()
+    raises "cannot be called from a running event loop". Rather than depend on
+    nest_asyncio, the coroutine is handed to a worker thread that owns a fresh
+    loop - correct in both a plain script and a notebook.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 async def probe_batch(domains: Iterable[str], concurrency: int = 100,
                       timeout: float = 10.0) -> list[tuple]:
     sem = asyncio.Semaphore(concurrency)
@@ -157,7 +174,7 @@ def run_collection(ledger: Ledger, out_dir, prefix: str = "tls_probe",
                 break
             if max_batches is not None and batches >= max_batches:
                 break
-            results = asyncio.run(probe_batch(todo, concurrency=concurrency))
+            results = _run(probe_batch(todo, concurrency=concurrency))
             for domain, status, row, error in results:
                 if row:
                     writer.add(row)
