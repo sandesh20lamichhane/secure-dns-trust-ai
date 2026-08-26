@@ -57,9 +57,14 @@ def _frame(rows: pd.DataFrame) -> pd.DataFrame:
 # Benign sources
 # --------------------------------------------------------------------------
 
-def load_tranco(path, top_n: int = 300_000) -> pd.DataFrame:
+def load_tranco(path, top_n: int = 1_000_000) -> pd.DataFrame:
     """Tranco CSV: rank,domain (no header). Keep the list ID in the filename -
-    it is the permanent citation for the exact snapshot used."""
+    it is the permanent citation for the exact snapshot used.
+
+    Full 1M by default. The benign side is the binding constraint on both
+    diversity and class ratio, so it is taken deep while the malicious side is
+    capped per family.
+    """
     df = pd.read_csv(path, header=None, names=["rank", "domain"], nrows=top_n)
     df["domain"] = df["domain"].map(registrable)
     df["label"] = 0
@@ -71,15 +76,38 @@ def load_tranco(path, top_n: int = 300_000) -> pd.DataFrame:
 # Malicious sources
 # --------------------------------------------------------------------------
 
-def load_umudga(root, families=None, per_family: int | None = 20_000) -> pd.DataFrame:
-    """UMUDGA ships one file per DGA family; the filename is the family label."""
+def load_umudga(root, per_family: int = 20_000, size: str = "50000",
+                families=None) -> pd.DataFrame:
+    """UMUDGA. Layout is <family>/list/<count>.txt, one bare domain per line.
+
+    Note the sibling `arff/` and `csv/` directories are ignored: those hold
+    UMUDGA's own precomputed feature sets, and this study computes its features
+    from the raw strings so that the same pipeline applies to every source.
+
+    20k per family rather than the full 1M file. Within a family every domain
+    comes from one algorithm under a different seed, so information saturates
+    quickly; what generalises is the number of families, which the
+    family-disjoint split holds out. Loading more rows per family inflates the
+    corpus without adding discriminative signal and pushes the class ratio far
+    from any realistic base rate. The sample-size ablation tests this claim
+    rather than asserting it.
+    """
     root = Path(root)
     frames = []
-    for f in sorted(root.rglob("*.csv")) + sorted(root.rglob("*.txt")):
-        family = f.stem.lower()
+    for list_dir in sorted(root.rglob("list")):
+        if not list_dir.is_dir():
+            continue
+        family = list_dir.parent.name.lower()
         if families and family not in families:
             continue
-        col = pd.read_csv(f, header=None, usecols=[0], names=["domain"],
+        f = list_dir / f"{size}.txt"
+        if not f.exists():
+            candidates = sorted(list_dir.glob("*.txt"),
+                                key=lambda p: p.stat().st_size, reverse=True)
+            if not candidates:
+                continue
+            f = candidates[0]
+        col = pd.read_csv(f, header=None, names=["domain"],
                           nrows=per_family, on_bad_lines="skip")
         col["family"] = family
         frames.append(col)
