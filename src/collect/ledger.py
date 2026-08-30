@@ -135,11 +135,27 @@ class Ledger:
         return self.drive_backup
 
     def restore_from_backup(self) -> bool:
-        """Rebuild a lost local ledger from the Drive copy after a fresh runtime."""
-        if self.drive_backup and self.drive_backup.exists() and not self.db_path.exists():
-            shutil.copy2(self.drive_backup, self.db_path)
-            return True
-        return False
+        """Rebuild a lost local ledger from the Drive copy after a fresh runtime.
+
+        Opening the ledger creates an empty database file as a side effect of
+        connecting, so "file exists" cannot be the test - an earlier version
+        used it and consequently never restored anything. The correct test is
+        whether the local ledger has any rows: an empty one is safe to replace
+        wholesale with the Drive backup.
+        """
+        if not (self.drive_backup and self.drive_backup.exists()):
+            return False
+        n = self.conn.execute("SELECT COUNT(*) FROM domains").fetchone()[0]
+        if n > 0:
+            return False                    # local state is real; keep it
+        self.conn.close()
+        shutil.copy2(self.drive_backup, self.db_path)
+        self.conn = sqlite3.connect(self.db_path, timeout=30)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+        self.conn.executescript(_SCHEMA)
+        self.conn.commit()
+        return True
 
     # ---------- reporting ----------
 
